@@ -8,8 +8,11 @@
         <h1 class="page-title">Recordings</h1>
         <p class="page-subtitle">Watch your recorded streams</p>
     </div>
-    <button class="btn btn-secondary" onclick="refreshRecordings()">Refresh</button>
+    <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="refreshRecordings()">Refresh</button>
         <button class="btn btn-secondary" onclick="regenerateThumbs()">Thumbs</button>
+        <button class="btn btn-secondary" onclick="fixRecordings()">Fix</button>
+    </div>
 </div>
 
 <!-- Video Player Modal -->
@@ -137,6 +140,17 @@ async function regenerateThumbs() {
         location.reload();
     } catch (e) {
         showToast('Error generating thumbnails', 'error');
+    }
+}
+
+async function fixRecordings() {
+    showToast('Fixing MP4 metadata...', 'info');
+    try {
+        const res = await fetch('/api/fix-recordings', {method: 'POST'});
+        const data = await res.json();
+        showToast('Fixed ' + data.fixed + ' recordings', 'success');
+    } catch (e) {
+        showToast('Error fixing recordings', 'error');
     }
 }
 
