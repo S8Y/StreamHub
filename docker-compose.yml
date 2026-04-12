@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  streamhub:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./recordings:/app/recordings
+    environment:
+      - FLASK_ENV=development
+      - WEB_PORT=5000
+    restart: unless-stopped
+    networks:
+      - streamhub
+
+networks:
+  streamhub:
+    driver: bridge

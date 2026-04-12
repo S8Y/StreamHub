@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}StreamHub{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com/">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Grid Background -->
+    <div class="parallax-grid" id="parallax-grid">
+        <canvas id="grid-canvas"></canvas>
+    </div>
+    
+    <!-- Status Banner - removed per user request -->
+    
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/">
+                <span class="nav-brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="8" r="4" stroke="#a855f7" stroke-width="1.5"/>
+                        <path d="M6 20c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#a855f7" stroke-width="1.5"/>
+                        <circle cx="12" cy="8" r="1.5" fill="#a855f7"/>
+                    </svg>
+                </span>
+                <span class="nav-brand-text" id="site-brand-name">StreamHub</span>
+            </a>
+            <span class="demo-badge">Beta</span>
+        </div>
+        <div class="nav-links">
+            <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">Dashboard</a>
+            <a href="/streamers" class="nav-link {% if request.path == '/streamers' %}active{% endif %}">Streamers</a>
+            <a href="/recordings" class="nav-link {% if request.path == '/recordings' %}active{% endif %}">Recordings</a>
+            <a href="/settings" class="nav-link {% if request.path == '/settings' %}active{% endif %}">Settings</a>
+        </div>
+        <div class="nav-user">
+            <div class="user-info">
+                <span class="user-name">Admin</span>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="footer-logo">◉</span>
+                <span>StreamHub</span>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <script>
+        // Toast Notification System
+        window.showToast = function(message, type = 'info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast toast-' + type;
+            
+            const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+            toast.innerHTML = '<span class="toast-icon">' + (icons[type] || icons.info) + '</span>' +
+                '<span class="toast-message">' + message + '</span>' +
+                '<button class="toast-close" onclick="this.parentElement.remove()">×</button>';
+            
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        };
+        
+        // Multi-Layer Parallax Grid Effect
+        (function() {
+            const canvas = document.getElementById('grid-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let mouseX = window.innerWidth / 2;
+            let mouseY = window.innerHeight / 2;
+            let targetX = mouseX;
+            let targetY = mouseY;
+            
+            const layers = [
+                { gridSize: 100, dotSize: 1.5, parallaxStrength: 0.01, alpha: 0.08, lineAlpha: 0.02 },
+                { gridSize: 50, dotSize: 1, parallaxStrength: 0.02, alpha: 0.12, lineAlpha: 0.03 },
+                { gridSize: 25, dotSize: 0.5, parallaxStrength: 0.04, alpha: 0.06, lineAlpha: 0.015 }
+            ];
+            
+            function resize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            
+            function drawLayer(layer, time) {
+                const { gridSize, dotSize, parallaxStrength, alpha, lineAlpha } = layer;
+                const offsetX = (mouseX - window.innerWidth / 2) * parallaxStrength + Math.sin(time * 0.0005) * 2;
+                const offsetY = (mouseY - window.innerHeight / 2) * parallaxStrength + Math.cos(time * 0.0003) * 2;
+                
+                ctx.strokeStyle = 'rgba(168, 85, 247, ' + (lineAlpha * 0.5) + ')';
+                ctx.lineWidth = 0.5;
+                
+                for (let x = -gridSize; x < canvas.width + gridSize; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + offsetX, 0);
+                    ctx.lineTo(x + offsetX, canvas.height);
+                    ctx.stroke();
+                }
+                
+                for (let y = -gridSize; y < canvas.height + gridSize; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y + offsetY);
+                    ctx.lineTo(canvas.width, y + offsetY);
+                    ctx.stroke();
+                }
+                
+                for (let x = -gridSize; x < canvas.width + gridSize; x += gridSize) {
+                    for (let y = -gridSize; y < canvas.height + gridSize; y += gridSize) {
+                        const px = x + offsetX;
+                        const py = y + offsetY;
+                        const dx = px - canvas.width / 2;
+                        const dy = py - canvas.height / 2;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const maxDistance = Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height) / 2;
+                        const glowAlpha = alpha * (0.5 + (1 - distance / maxDistance) * 0.5);
+                        const pulse = Math.sin(time * 0.002 + x * 0.01 + y * 0.01) * 0.3 + 0.7;
+                        
+                        ctx.fillStyle = 'rgba(168, 85, 247, ' + (glowAlpha * pulse * 0.5) + ')';
+                        ctx.beginPath();
+                        ctx.arc(px, py, dotSize, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            function drawGrid(time) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                layers.forEach(layer => drawLayer(layer, time));
+            }
+            
+            function animate(time) {
+                mouseX += (targetX - mouseX) * 0.05;
+                mouseY += (targetY - mouseY) * 0.05;
+                drawGrid(time);
+                requestAnimationFrame(animate);
+            }
+            
+            window.addEventListener('resize', resize);
+            document.addEventListener('mousemove', (e) => {
+                targetX = e.clientX;
+                targetY = e.clientY;
+            });
+            
+            resize();
+            animate();
+        })();
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

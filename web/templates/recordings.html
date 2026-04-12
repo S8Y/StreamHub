@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}StreamHub - Recordings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1 class="page-title">Recordings</h1>
+        <p class="page-subtitle">Watch your recorded streams</p>
+    </div>
+    <button class="btn btn-secondary" onclick="refreshRecordings()">Refresh</button>
+        <button class="btn btn-secondary" onclick="regenerateThumbs()">Thumbs</button>
+</div>
+
+<!-- Video Player Modal -->
+<div id="player-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="player-title">Video Player</h3>
+            <button class="btn btn-ghost" onclick="closePlayer()">X</button>
+        </div>
+        <video id="video-player" controls style="width: 100%; margin-top: 10px; background: #000;">
+            Your browser does not support video playback.
+        </video>
+        <div style="margin-top: 10px; display: flex; gap: 10px;">
+            <button class="btn btn-secondary btn-sm" id="download-btn" onclick="downloadCurrent()">Download</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCurrent()">Delete</button>
+        </div>
+    </div>
+</div>
+
+{% if recordings %}
+<div class="recording-grid">
+    {% for recording in recordings %}
+    <div class="recording-card" id="card-{{ recording.id }}">
+        <div class="streamer-header">
+            <span class="streamer-platform">{{ recording.platform if recording.platform else 'Stream' }}</span>
+            <span class="streamer-status">
+                <span class="status-dot {% if recording.status == 'recording' %}online{% else %}offline{% endif %}"></span>
+                {{ recording.status }}
+            </span>
+        </div>
+        
+        <!-- Thumbnail Preview -->
+        <div class="thumbnail-wrapper" id="thumbs-{{ recording.id }}">
+            <img src="/thumbnails/{{ recording.id }}_1" alt="Preview" class="thumbnails-main" 
+                 onerror="this.style.display='none'">
+        </div>
+        
+        <div class="recording-meta">
+            <span class="recording-title">{{ recording.username if recording.username else 'Unknown' }}</span>
+            <span class="recording-date">{{ recording.created[5:16] if recording.created else 'N/A' }}</span>
+        </div>
+        <div class="recording-info">
+            {% if recording.duration %}<span>{{ recording.duration }}</span>{% endif %}
+            {% if recording.bitrate %}<span>{{ recording.bitrate }}</span>{% endif %}
+            {% if recording.file_size %}<span>{{ (recording.file_size / 1024 / 1024)|round(2) }} MB</span>{% endif %}
+        </div>
+        
+        <!-- Hidden data for player -->
+        <input type="hidden" id="file-{{ recording.id }}" value="{{ recording.file_path }}">
+        <div class="streamer-actions">
+            <button class="btn btn-secondary btn-sm" onclick="playRecording('{{ recording.id }}')">Watch</button>
+            <button class="btn btn-primary btn-sm" onclick="downloadRecording('{{ recording.id }}')">DL</button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteRecording('{{ recording.id }}')">X</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center mt-lg">
+    <p class="text-secondary">No recordings yet.</p>
+    <a href="/streamers" class="btn btn-primary mt-md">Add Streamers to Monitor</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var current_recording_id = null;
+
+function playRecording(id) {
+    current_recording_id = id;
+    var filePath = document.getElementById('file-' + id).value;
+    var player = document.getElementById('video-player');
+    var modal = document.getElementById('player-modal');
+    var title = document.getElementById('player-title');
+    
+    // Get filename for title
+    var filename = filePath.split(/[/\\]/).pop();
+    title.textContent = filename;
+    
+    // Convert path to URL - use flask serve
+    player.src = '/recordings/' + encodeURIComponent(filename);
+    
+    modal.style.display = 'flex';
+    player.play();
+}
+
+function closePlayer() {
+    var player = document.getElementById('video-player');
+    player.pause();
+    document.getElementById('player-modal').style.display = 'none';
+    current_recording_id = null;
+}
+
+function downloadCurrent() {
+    if (current_recording_id) {
+        downloadRecording(current_recording_id);
+    }
+}
+
+function deleteCurrent() {
+    if (current_recording_id && confirm('Delete this recording?')) {
+        deleteRecording(current_recording_id);
+        closePlayer();
+    }
+}
+
+async function refreshRecordings() {
+    try {
+        const res = await fetch('/api/recordings');
+        const data = await res.json();
+        showToast('Refreshed recordings list', 'success');
+        location.reload();
+    } catch (e) {
+        showToast('Error refreshing recordings', 'error');
+    }
+}
+
+async function regenerateThumbs() {
+    showToast('Generating thumbnails...', 'info');
+    try {
+        const res = await fetch('/api/regenerate-thumbnails', {method: 'POST'});
+        const data = await res.json();
+        showToast('Generated ' + data.generated + ' thumbnails', 'success');
+        location.reload();
+    } catch (e) {
+        showToast('Error generating thumbnails', 'error');
+    }
+}
+
+async function downloadRecording(id) {
+    var filePath = document.getElementById('file-' + id).value;
+    var filename = filePath.split(/[/\\]/).pop();
+    window.location.href = '/recordings/' + encodeURIComponent(filename) + '?download=1';
+}
+
+async function deleteRecording(id) {
+    if (!confirm('Delete this recording?')) return;
+    
+    try {
+        const res = await fetch('/api/recordings/' + id, {method: 'DELETE'});
+        if (res.ok) {
+            showToast('Recording deleted', 'success');
+            location.reload();
+        }
+    } catch (e) {
+        showToast('Error deleting recording', 'error');
+    }
+}
+</script>
+{% endblock %}

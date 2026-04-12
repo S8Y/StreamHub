@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}StreamHub - Dashboard{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1 data-site-name="">StreamHub</h1>
+    <p class="subtitle">Stream Recording Hub</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">📡</div>
+        <div class="stat-value">{{ streamers_count }}</div>
+        <div class="stat-label">Total</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="color: var(--success);">●</div>
+        <div class="stat-value">{{ live_count }}</div>
+        <div class="stat-label">Live</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="color: var(--danger);">🎥</div>
+        <div class="stat-value">{{ recording_count }}</div>
+        <div class="stat-label">Recording</div>
+    </div>
+    <a href="/recordings" class="stat-card">
+        <div class="stat-icon">▼</div>
+        <div class="stat-value">{{ recordings|length }}</div>
+        <div class="stat-label">Files</div>
+    </a>
+</div>
+
+<!-- Live Log Box -->
+<div class="log-box">
+    <div class="log-header">
+        <span class="log-title">Live Activity</span>
+        <span class="log-live-indicator">
+            <span class="log-live-dot"></span> LIVE
+        </span>
+    </div>
+    <div class="log-content" id="log-content">
+        <div class="log-entry">
+            <span class="log-time">--:--:--</span>
+            <span class="log-message">System ready</span>
+        </div>
+    </div>
+</div>
+
+<div class="action-grid">
+    <a href="/streamers" class="action-card">
+        <div class="action-card-content">
+            <div class="action-icon">➕</div>
+            <h2>Add Streamer</h2>
+            <p>Add a new streamer</p>
+        </div>
+    </a>
+    <a href="/settings" class="action-card">
+        <div class="action-card-content">
+            <div class="action-icon">⚙️</div>
+            <h2>Settings</h2>
+            <p>Configure</p>
+        </div>
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Live log updates - fixed height, scrollable
+const maxLogs = 15;
+const logs = [];
+const logKeys = new Set();
+
+function addLog(message, type = '') {
+    const now = new Date();
+    const time = now.toTimeString().slice(0, 8);
+    const key = time + '|' + message;
+    
+    // Skip duplicates
+    if (logKeys.has(key)) return;
+    logKeys.add(key);
+    
+    logs.unshift({ time, message, type });
+    if (logs.length > maxLogs) {
+        const removed = logs.pop();
+        if (removed) {
+            logKeys.delete(removed.time + '|' + removed.message);
+        }
+    }
+    
+    const container = document.getElementById('log-content');
+    if (container) {
+        const isScrolled = container.scrollTop > 10;
+        container.innerHTML = logs.map(log => 
+            '<div class="log-entry"><span class="log-time">' + log.time + '</span><span class="log-message ' + log.type + '">' + log.message + '</span></div>'
+        ).join('');
+        // Maintain scroll position
+        if (isScrolled) {
+            container.scrollTop = 0;
+        }
+    }
+}
+
+// Load initial logs from server
+async function loadInitialLogs() {
+    try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        // Add backwards so newest first
+        for (let i = 0; i < data.logs.length; i++) {
+            const log = data.logs[i];
+            addLog(log.message, log.type);
+        }
+    } catch (e) {
+        addLog('System ready');
+    }
+}
+
+// Poll for new logs
+async function fetchLogs() {
+    try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        data.logs.forEach(log => addLog(log.message, log.type));
+    } catch (e) {}
+}
+
+// Load immediately then poll
+loadInitialLogs();
+setInterval(fetchLogs, 3000);
+</script>
+{% endblock %}

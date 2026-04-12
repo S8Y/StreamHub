@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}StreamHub - Streamers{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1 class="page-title">Streamers</h1>
+        <p class="page-subtitle">Manage your monitored streamers</p>
+    </div>
+    <div class="page-header-right">
+        <button class="btn btn-secondary" onclick="checkAllAndRecord()">Check All</button>
+        <button class="btn btn-primary" onclick="showAddModal()">+ Add</button>
+    </div>
+</div>
+
+{% if streamers %}
+<div class="streamer-grid">
+    {% for streamer in streamers %}
+    <div class="streamer-card" id="card-{{ streamer.id }}">
+        <div class="streamer-header">
+            <span class="streamer-platform">{{ streamer.platform }}</span>
+            <span class="streamer-status status-{{ streamer.status }}">
+                <span class="status-dot {% if streamer.status == 'live' %}online{% elif streamer.status == 'recording' %}recording{% else %}offline{% endif %}"></span>
+                {{ streamer.status|upper }}
+            </span>
+        </div>
+        <div class="streamer-name">{{ streamer.username }}</div>
+        
+        <!-- Stats - show for all statuses -->
+        <div class="recording-stats {% if streamer.status == 'recording' %}recording-active{% elif streamer.status == 'offline' %}offline-stats{% endif %}">
+            <div class="recording-stats-grid">
+                {% if streamer.status == 'offline' %}
+                <div class="rec-stat">
+                    <span class="rec-stat-label">Status</span>
+                    <span class="rec-stat-value offline-value">OFFLINE</span>
+                </div>
+                <div class="rec-stat">
+                    <span class="rec-stat-label">Checked</span>
+                    <span class="rec-stat-value">{{ streamer.last_checked[:19] if streamer.last_checked else 'Never' }}</span>
+                </div>
+                {% else %}
+                <div class="rec-stat">
+                    <span class="rec-stat-label">Started</span>
+                    <span class="rec-stat-value" id="started-{{ streamer.id }}">{{ streamer.started_at[:19] if streamer.started_at else 'N/A' }}</span>
+                </div>
+                <div class="rec-stat">
+                    <span class="rec-stat-label">Duration</span>
+                    <span class="rec-stat-value" id="duration-{{ streamer.id }}">--:--:--</span>
+                </div>
+                <div class="rec-stat">
+                    <span class="rec-stat-label">Size</span>
+                    <span class="rec-stat-value" id="size-{{ streamer.id }}">-- MB</span>
+                </div>
+                <div class="rec-stat">
+                    <span class="rec-stat-label">Bitrate</span>
+                    <span class="rec-stat-value" id="bitrate-{{ streamer.id }}">-- kbps</span>
+                </div>
+                {% endif %}
+            </div>
+            {% if streamer.status == 'recording' %}
+            <div class="recording-indicator">
+                <span class="recording-dot"></span> Recording
+                <span class="live-pulse"></span>
+            </div>
+            {% elif streamer.status == 'live' %}
+            <div class="recording-indicator live-indicator">
+                <span class="status-dot online"></span> LIVE
+            </div>
+            {% else %}
+            <div class="recording-indicator offline-indicator">
+                <span class="status-dot offline"></span> Offline
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="streamer-controls">
+            <label class="toggle-switch">
+                <input type="checkbox" {% if streamer.auto_record != False %}checked{% endif %} onchange="toggleAutoRecord('{{ streamer.id }}', this.checked)">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Auto</span>
+            </label>
+        </div>
+        
+        <div class="streamer-actions">
+            <button class="btn btn-ghost btn-sm" onclick="removeStreamer('{{ streamer.id }}')">Remove</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📡</div>
+    <p>No streamers added yet</p>
+    <button class="btn btn-primary mt-md" onclick="showAddModal()">Add Your First</button>
+</div>
+{% endif %}
+
+<!-- Add Streamer Modal -->
+<div id="add-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h3>Add Streamer</h3>
+        <form id="add-streamer-form" onsubmit="addStreamer(event)">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-input" name="username" required placeholder="streamer">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Platform</label>
+                <select class="form-select" name="platform" required>
+                    <option value="">Select</option>
+                    <option value="SC">StripChat</option>
+                    <option value="CB">Chaturbate</option>
+                    <option value="CS">CamSoda</option>
+                    <option value="FL">Fansly</option>
+                    <option value="TW">Twitch</option>
+                    <option value="KC">Kick</option>
+                    <option value="YT">YouTube</option>
+                </select>
+            </div>
+            <div class="flex gap-sm mt-md">
+                <button type="submit" class="btn btn-primary">Add</button>
+                <button type="button" class="btn btn-secondary" onclick="hideAddModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Recording stats update interval
+const recordingStats = {};
+
+function showAddModal() {
+    document.getElementById('add-modal').style.display = 'flex';
+}
+
+function hideAddModal() {
+    document.getElementById('add-modal').style.display = 'none';
+}
+
+async function addStreamer(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = { username: form.username.value, platform: form.platform.value };
+    try {
+        const res = await fetch('/api/streamers', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            showToast('Streamer added', 'success');
+            hideAddModal();
+            location.reload();
+        } else {
+            showToast('Failed to add', 'error');
+        }
+    } catch (e) {
+        showToast('Error', 'error');
+    }
+}
+
+async function removeStreamer(id) {
+    if (!confirm('Remove?')) return;
+    try {
+        const res = await fetch('/api/streamers/' + id, {method: 'DELETE'});
+        if (res.ok) {
+            showToast('Removed', 'success');
+            location.reload();
+        }
+    } catch (e) {
+        showToast('Error', 'error');
+    }
+}
+
+async function toggleAutoRecord(id, enabled) {
+    try {
+        const res = await fetch('/api/streamers/' + id, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({auto_record: enabled})
+        });
+        showToast(enabled ? 'Auto-record on' : 'Auto-record off', 'info');
+    } catch (e) {
+        showToast('Error', 'error');
+    }
+}
+
+async function checkAllAndRecord() {
+    showToast('Checking...', 'info');
+    try {
+        const res = await fetch('/api/check-all', {method: 'POST'});
+        const data = await res.json();
+        let live = data.results.filter(r => r.status === 'live').length;
+        showToast(live + ' live', 'success');
+        setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+        showToast('Error', 'error');
+    }
+}
+
+// Update recording stats every second
+async function updateRecordingStats() {
+    try {
+        const res = await fetch('/api/recording-stats');
+        const stats = await res.json();
+        for (const [id, data] of Object.entries(stats)) {
+            const duration = document.getElementById('duration-' + id);
+            const size = document.getElementById('size-' + id);
+            const bitrate = document.getElementById('bitrate-' + id);
+            if (duration) duration.textContent = data.duration || '--:--:--';
+            if (size) size.textContent = data.size || '-- MB';
+            if (bitrate) bitrate.textContent = data.bitrate || '-- kbps';
+        }
+    } catch (e) {}
+}
+
+// Start stats update
+setInterval(updateRecordingStats, 1000);
+</script>
+{% endblock %}

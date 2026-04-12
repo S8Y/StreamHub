@@ -1,0 +1,13 @@
+# Core
+flask>=3.0.0
+flask-cors>=4.0.0
+requests>=2.31.0
+
+# Video processing - fast thumbnailing
+opencv-python>=4.8.0
+
+# Configuration
+PyYAML>=6.0.0
+
+# Utilities
+python-dateutil>=2.8.0

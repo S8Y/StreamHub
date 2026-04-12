@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}StreamHub - Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-left">
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Configure StreamHub</p>
+    </div>
+</div>
+
+<div class="settings-grid">
+    <!-- Web Interface -->
+    <div class="settings-card">
+        <h3>🌐 Web</h3>
+        <div class="form-group">
+            <label class="form-label">Port</label>
+            <input type="number" class="form-input" id="web_port" value="{{ config.get('web_port', 6969) }}" min="1024" max="65535">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-input" id="username" value="{{ config.get('username', 'admin') }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-input" id="password" value="" placeholder="••••••••">
+        </div>
+    </div>
+    
+    <!-- Recording -->
+    <div class="settings-card">
+        <h3>🎬 Recording</h3>
+        <div class="form-group">
+            <label class="form-label">Download Directory</label>
+            <input type="text" class="form-input" id="downloads_dir" value="{{ config.get('downloads_dir', './recordings') }}">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Quality</label>
+            <select class="form-select" id="quality">
+                <option value="best" {% if config.get('quality') == 'best' %}selected{% endif %}>Best</option>
+                <option value="1080p" {% if config.get('quality') == '1080p' %}selected{% endif %}>1080p</option>
+                <option value="720p" {% if config.get('quality') == '720p' %}selected{% endif %}>720p</option>
+                <option value="480p" {% if config.get('quality') == '480p' %}selected{% endif %}>480p</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-checkbox">
+                <input type="checkbox" id="auto_record" {% if config.get('auto_record', True) %}checked{% endif %}>
+                Auto-record live
+            </label>
+        </div>
+    </div>
+    
+    <!-- Compression -->
+    <div class="settings-card">
+        <h3>💾 Compression</h3>
+        <div class="form-group">
+            <label class="form-label">Compress recordings</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="compress_recordings" {% if config.get('compress_recordings') %}checked{% endif %}>
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Compression Speed</label>
+            <select class="form-select" id="compression_preset">
+                <option value="ultrafast" {% if config.get('compression_preset') == 'ultrafast' %}selected{% endif %}>Ultra Fast (larger file)</option>
+                <option value="fast" {% if config.get('compression_preset') == 'fast' %}selected{% endif %}>Fast</option>
+                <option value="medium" {% if config.get('compression_preset') == 'medium' %}selected{% endif %}>Medium (balanced)</option>
+                <option value="slow" {% if config.get('compression_preset') == 'slow' %}selected{% endif %}>Slow (smaller)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Quality (CRF)</label>
+            <select class="form-select" id="compression_crf">
+                <option value="18" {% if config.get('compression_crf') == 18 %}selected{% endif %}>18 - Visually lossless</option>
+                <option value="23" {% if config.get('compression_crf') == 23 %}selected{% endif %}>23 - Default</option>
+                <option value="28" {% if config.get('compression_crf') == 28 %}selected{% endif %}>28 - Smaller file</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Monitoring -->
+    <div class="settings-card">
+        <h3>🔄 Monitor</h3>
+        <div class="form-group">
+            <label class="form-label">Poll Interval (s)</label>
+            <input type="number" class="form-input" id="poll_interval" value="{{ config.get('poll_interval', 60) }}" min="10" max="300">
+        </div>
+        <div class="form-group">
+            <label class="form-checkbox">
+                <input type="checkbox" id="check_on_startup" {% if config.get('check_on_startup', True) %}checked{% endif %}>
+                Check on startup
+            </label>
+        </div>
+    </div>
+    
+    <!-- FFmpeg -->
+    <div class="settings-card">
+        <h3>🎥 FFmpeg</h3>
+        <div class="form-group">
+            <label class="form-label">Path</label>
+            <input type="text" class="form-input" id="ffmpeg_path" value="{{ config.get('ffmpeg_path', 'ffmpeg') }}">
+        </div>
+        <div class="form-group">
+            <label class="form-checkbox">
+                <input type="checkbox" id="ffmpeg_convert" {% if config.get('ffmpeg_convert', True) %}checked{% endif %}>
+                Convert to MP4
+            </label>
+        </div>
+    </div>
+    
+    <!-- Streamlink -->
+    <div class="settings-card">
+        <h3>📡 Streamlink</h3>
+        <div class="form-group">
+            <label class="form-label">Path</label>
+            <input type="text" class="form-input" id="streamlink_path" value="{{ config.get('streamlink_path', 'streamlink') }}">
+        </div>
+    </div>
+    
+    <!-- Fansly -->
+    <div class="settings-card">
+        <h3>💜 Fansly</h3>
+        <div class="form-group">
+            <label class="form-label">Auth Token</label>
+            <input type="password" class="form-input" id="fansly_auth_token" value="" placeholder="••••••••">
+        </div>
+    </div>
+</div>
+
+<div class="flex gap-sm mt-lg">
+    <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+        <button class="btn btn-secondary" onclick="clearCache()">Clear Cache</button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function saveSettings() {
+    const settings = {
+        web_port: parseInt(document.getElementById('web_port').value),
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+        downloads_dir: document.getElementById('downloads_dir').value,
+        quality: document.getElementById('quality').value,
+        auto_record: document.getElementById('auto_record').checked,
+        poll_interval: parseInt(document.getElementById('poll_interval').value),
+        check_on_startup: document.getElementById('check_on_startup').checked,
+        ffmpeg_path: document.getElementById('ffmpeg_path').value,
+        ffmpeg_convert: document.getElementById('ffmpeg_convert').checked,
+        streamlink_path: document.getElementById('streamlink_path').value,
+        fansly_auth_token: document.getElementById('fansly_auth_token').value,
+        // Compression settings (missing!)
+        compress_recordings: document.getElementById('compress_recordings').checked,
+        compression_preset: document.getElementById('compression_preset').value,
+        compression_crf: parseInt(document.getElementById('compression_crf').value),
+    };
+    
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings)
+        });
+        if (res.ok) {
+            showToast('Settings saved. Restart for port change.', 'success');
+        } else {
+            showToast('Failed to save', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function clearCache() {
+    if (!confirm('Clear thumbnail cache?')) return;
+    try {
+        const res = await fetch('/api/clear-cache', {method: 'POST'});
+        const data = await res.json();
+        showToast('Cleared ' + data.deleted + ' files', 'success');
+    } catch (e) {
+        showToast('Error clearing cache', 'error');
+    }
+}
+</script>
+{% endblock %}

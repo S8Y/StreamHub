@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamHub - Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0b0d;
+            --bg-secondary: #0d0d10;
+            --bg-card: #0f0f12;
+            --border-subtle: rgba(255, 255, 255, 0.05);
+            --border-primary: rgba(255, 255, 255, 0.08);
+            --text-primary: rgba(255, 255, 255, 0.95);
+            --text-secondary: rgba(255, 255, 255, 0.55);
+            --text-muted: rgba(255, 255, 255, 0.35);
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.15);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 32px;
+            width: 100%;
+            max-width: 320px;
+        }
+        .login-logo {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 24px;
+            display: block;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+            margin-bottom: 24px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.6875rem;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+        .btn {
+            width: 100%;
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #8b5cf6;
+        }
+        .error {
+            color: #f472b6;
+            font-size: 0.75rem;
+            margin-top: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <svg class="login-logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="8" r="4" stroke="#a855f7" stroke-width="1.5"/>
+            <path d="M6 20c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#a855f7" stroke-width="1.5"/>
+            <circle cx="12" cy="8" r="1.5" fill="#a855f7"/>
+        </svg>
+        <h1>StreamHub</h1>
+        <p class="subtitle">Login Required</p>
+        <form id="login-form">
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="password" required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+        <p class="error" id="error" style="display: none;">Invalid password</p>
+    </div>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({password})
+                });
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    document.getElementById('error').style.display = 'block';
+                }
+            } catch (e) {
+                document.getElementById('error').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
