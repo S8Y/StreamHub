@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any
-from backend.platforms import get_platform, StreamStatus
+from backend.platforms import get_platform
 
 
 class StreamerManager:
@@ -171,7 +171,7 @@ class StreamerManager:
             self._save_streamers()
             return {'id': streamer_id, 'username': username, 'platform': platform, 'status': status}
         
-        # Check via API for other platforms
+# Check via API for other platforms
         status = self._check_api(username, platform)
         streamer['status'] = status
         self._save_streamers()
@@ -193,18 +193,93 @@ class StreamerManager:
         return 'offline'
     
     def _check_api(self, username: str, platform: str) -> str:
-        """Check status via API (for adult sites)"""
+        """Check status via API (StreaMonitor-style)"""
         import requests
+        platform = platform.upper()
+        headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.google.com/'}
+        
         # StripChat
-        if platform.upper() == 'SC':
+        if platform == 'SC':
             try:
                 r = requests.get(f'https://stripchat.com/api/front/v2/models/username/{username}/cam', timeout=10)
+                if r.status_code == 200 and r.json().get('isLive'):
+                    return 'live'
+            except:
+                pass
+        
+        # Chaturbate
+        elif platform == 'CB':
+            try:
+                r = requests.get(f'https://chaturbate.com/{username}/', timeout=10, headers=headers)
                 if r.status_code == 200:
-                    data = r.json()
-                    if data.get('isLive'):
+                    if 'isOffline' not in r.text and 'offline' not in r.text[:200].lower():
                         return 'live'
             except:
                 pass
+        
+        # CamSoda
+        elif platform == 'CS':
+            try:
+                r = requests.get(f'https://camsoda.com/api/v1/{username}/is-online', timeout=10)
+                if r.status_code == 200 and r.json().get('is_online'):
+                    return 'live'
+            except:
+                pass
+        
+        # Flirt4Free
+        elif platform == 'F4F':
+            try:
+                r = requests.get(f'https://www.flirt4free.com/ajax/roomstatus.php?username={username}', timeout=10)
+                if r.status_code == 200 and r.json().get('status') == 'online':
+                    return 'live'
+            except:
+                pass
+        
+        # MyFreeCams
+        elif platform == 'MFC':
+            try:
+                r = requests.get(f'https://models.myfreecams.com/api2/jsonfcgi.php?method=user.getDetails&name[0]={username}', timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    user = data.get('user', {})
+                    if user.get('current_show') or user.get('status') == 'public':
+                        return 'live'
+            except:
+                pass
+        
+        # Cam4
+        elif platform == 'C4':
+            try:
+                r = requests.get(f'https://www.cam4.com/_ui/api/v1/model/{username}/status', timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get('online'):
+                        return 'live'
+            except:
+                pass
+        
+        # Bongacams
+        elif platform == 'BC':
+            try:
+                r = requests.get(f'https://bongacams.com/api/v1/models/{username}', timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get('isOnline'):
+                        return 'live'
+            except:
+                pass
+        
+        # Fansly
+        elif platform == 'FL':
+            try:
+                r = requests.get(f'https://api.fansly.com/account/{username}', timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get('isLiveStream'):
+                        return 'live'
+            except:
+                pass
+        
         return 'offline'
     
     def get_recordings(self) -> List[Dict]:

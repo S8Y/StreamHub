@@ -82,7 +82,7 @@ class Recorder:
         
         # Start recording process
         try:
-            if platform_slug.lower() in ['tw', 'kc', 'yt']:
+            if platform_slug.upper() in ['TW', 'KC', 'YT']:
                 # Use streamlink for Twitch/Kick/YouTube
                 cmd = [
                     self.config.streamlink_path or "streamlink",
@@ -91,7 +91,7 @@ class Recorder:
                     "-o", output_path
                 ]
             else:
-                # Use ffmpeg directly for HLS streams - save as mp4 for browser
+                # Use FFmpeg directly for HLS streams (adult sites)
                 cmd = [
                     self.config.ffmpeg_path or "ffmpeg",
                     "-i", stream_url,
@@ -188,9 +188,27 @@ class Recorder:
     
     def _get_stream_url(self, platform_slug: str, username: str) -> Optional[str]:
         """Get stream URL for a platform"""
-        # For now, construct the URL based on platform
-        # In production, this would query the platform API
+        # Use platform classes for HLS URLs (from streamonitor/streaweather)
+        from backend.platforms import get_platform
+        platform_cls = get_platform(platform_slug)
+        if platform_cls:
+            import asyncio
+            try:
+                # Get async stream URL synchronously
+                loop = asyncio.new_event_loop()
+                url = loop.run_until_complete(
+                    platform_cls().get_stream_url(username, "best")
+                )
+                loop.close()
+                return url
+            except Exception as e:
+                print(f"Platform URL error: {e}")
+        
+        # Fall back to website URLs for streamlink
         urls = {
+            'TW': f"https://www.twitch.tv/{username}",
+            'KC': f"https://kick.com/{username}",
+            'YT': f"https://www.youtube.com/@{username}",
             'SC': f"https://stripchat.com/{username}",
             'CB': f"https://chaturbate.com/{username}",
             'CS': f"https://camsoda.com/{username}",
@@ -198,10 +216,7 @@ class Recorder:
             'MFC': f"https://myfreecams.com/{username}",
             'C4': f"https://cam4.com/{username}",
             'BC': f"https://bongacams.com/{username}",
-            'FL': f"https://fansly.com/live/{username}",
-            'TW': f"https://www.twitch.tv/{username}",
-            'KC': f"https://kick.com/{username}",
-            'YT': f"https://www.youtube.com/@{username}"
+            'FL': f"https://fansly.com/live/{username}"
         }
         
         return urls.get(platform_slug.upper())
