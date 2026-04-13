@@ -48,10 +48,16 @@ class Recorder:
                 continue
             
             status_info = self.streamer_manager.check_status(streamer['id'])
-            if status_info.get('status') == 'live':
+            is_live = status_info.get('status') == 'live'
+            
+            if is_live:
                 # Auto-start recording if not already recording
                 if not self._is_recording(streamer['id']):
                     self.start_recording(streamer['id'])
+            else:
+                # Stop recording if streamer went offline
+                if self._is_recording(streamer['id']):
+                    self.stop_recording(streamer['id'])
     
     def _is_recording(self, streamer_id: str) -> bool:
         """Check if streamer is currently being recorded"""
