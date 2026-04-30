@@ -1358,10 +1358,12 @@ body {
     .page-header {
         flex-direction: column;
         gap: var(--spacing-sm);
+        padding: var(--spacing-sm) 0;
     }
     
     .page-header-left {
         width: 100%;
+        align-items: center;
     }
     
     /* Log Box */
@@ -1435,23 +1437,25 @@ body {
 /* Page Header */
 .page-header {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     width: 100%;
     max-width: var(--container-xl);
-    flex-wrap: wrap;
     gap: var(--spacing-sm);
     text-align: center;
+    padding: var(--spacing-sm) 0;
 }
 
 .page-header-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    flex: 1;
-    min-width: clamp(180px, 30vw, 300px);
 }
 
 .page-header-left h1 {
-    font-size: 1.25rem;
+    font-size: clamp(1.25rem, 4vw, 1.5rem);
     font-weight: 700;
     color: var(--text-primary);
     text-transform: uppercase;
@@ -1461,9 +1465,10 @@ body {
 
 .page-header-right {
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-sm);
     flex-wrap: wrap;
     justify-content: center;
+    align-items: center;
 }
 
 .page-subtitle {
