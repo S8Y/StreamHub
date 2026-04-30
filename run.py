@@ -291,12 +291,61 @@ def recording_stats_api():
         }
     return jsonify(stats)
 
+def _generate_placeholder_thumbnail(thumb_dir: str, base_id: str, thumb_num: int) -> str:
+    """Generate a placeholder thumbnail image"""
+    import cv2
+    import numpy as np
+    
+    thumb_path = os.path.join(thumb_dir, f'{base_id}_{thumb_num}.jpg')
+    
+    # Create a dark gradient placeholder
+    img = np.zeros((180, 320, 3), dtype=np.uint8)
+    # Dark background
+    img[:] = (20, 20, 25)
+    
+    # Add some visual interest
+    cv2.rectangle(img, (0, 0), (320, 180), (40, 40, 50), -1)
+    cv2.putText(img, "No Preview", (90, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 120), 1)
+    cv2.putText(img, "Available", (115, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 80, 100), 1)
+    
+    cv2.imwrite(thumb_path, img, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    return thumb_path
+
+
+def _get_video_duration_filepath(filepath: str) -> float:
+    """Get video duration using ffprobe for robustness"""
+    try:
+        import subprocess
+        cmd = [
+            'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', filepath
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=15, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+    except:
+        pass
+    
+    # Fallback to ffmpeg parsing
+    try:
+        cmd = [config.ffmpeg_path or 'ffmpeg', '-i', filepath]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        _, stderr = proc.communicate(timeout=10)
+        output = stderr.decode('utf8', errors='ignore')
+        import re
+        m = re.search(r'Duration: (\d+):(\d+):(\d+\.\d+)', output)
+        if m:
+            return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+    except:
+        pass
+    
+    return 0
+
+
 @app.route('/thumbnails/<recording_id>_<int:thumb_num>')
 @app.route('/thumbnails/<recording_id>')
 def get_thumbnail(recording_id, thumb_num=1):
     """Generate and serve thumbnails for recording at different timestamps"""
-    import subprocess
-    
     # Parse recording_id (might include _1, _2 etc)
     parts = recording_id.rsplit('_', 1)
     base_id = parts[0]
@@ -311,137 +360,279 @@ def get_thumbnail(recording_id, thumb_num=1):
             break
     
     if not rec:
-        return "Not found", 404
+        # Return placeholder for unknown recordings
+        thumb_dir = os.path.join(config.downloads_dir, '.thumbnails')
+        os.makedirs(thumb_dir, exist_ok=True)
+        placeholder_path = _generate_placeholder_thumbnail(thumb_dir, base_id, thumb_num)
+        return send_from_directory(thumb_dir, os.path.basename(placeholder_path))
     
     filepath = rec.get('file_path', '')
     if not filepath or not os.path.exists(filepath):
-        return "File not found", 404
+        # Return placeholder for missing file
+        thumb_dir = os.path.join(config.downloads_dir, '.thumbnails')
+        os.makedirs(thumb_dir, exist_ok=True)
+        placeholder_path = _generate_placeholder_thumbnail(thumb_dir, base_id, thumb_num)
+        return send_from_directory(thumb_dir, os.path.basename(placeholder_path))
     
-    # Quick thumbnail - just grab frame at 10 seconds, no probing
-    timestamp = 10
+    # Get video duration to determine best timestamp
+    duration = _get_video_duration_filepath(filepath)
+    
+    # Calculate timestamp based on thumbnail number - spread across video
+    if duration <= 0:
+        timestamp = 1
+    else:
+        if thumb_num == 1:
+            timestamp = max(1, min(5, duration * 0.05))
+        elif thumb_num == 2:
+            timestamp = max(10, duration * 0.25)
+        elif thumb_num == 3:
+            timestamp = max(10, duration * 0.5)
+        else:
+            timestamp = max(10, duration * 0.75)
     
     thumb_dir = os.path.join(config.downloads_dir, '.thumbnails')
     os.makedirs(thumb_dir, exist_ok=True)
     thumb_path = os.path.join(thumb_dir, f'{base_id}_{thumb_num}.jpg')
     
-    # Generate thumbnail with OpenCV (instant)
+    # Generate thumbnail
+    generated = False
     if not os.path.exists(thumb_path):
+        # Try OpenCV first (fastest)
         try:
             import cv2
             cap = cv2.VideoCapture(filepath)
             if cap.isOpened():
-                cap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
-                ret, frame = cap.read()
+                frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                if frame_count > 0 and fps > 0:
+                    # Calculate frame position
+                    frame_pos = int(timestamp * fps)
+                    frame_pos = min(frame_pos, int(frame_count) - 1)
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        frame = cv2.resize(frame, (320, 180), interpolation=cv2.INTER_LINEAR)
+                        cv2.imwrite(thumb_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        generated = True
                 cap.release()
-                if ret and frame is not None:
-                    frame = cv2.resize(frame, (320, 180), interpolation=cv2.INTER_LINEAR)
-                    cv2.imwrite(thumb_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         except ImportError:
-            # Fallback to FFmpeg
+            pass
+        except Exception as e:
+            print(f"OpenCV thumbnail error: {e}")
+        
+        # Fallback to FFmpeg
+        if not generated:
             try:
+                import subprocess
                 cmd = [
                     config.ffmpeg_path or 'ffmpeg',
-                    '-threads', '1',
-                    '-i', filepath,
+                    '-threads', '2',
                     '-ss', str(timestamp),
+                    '-i', filepath,
                     '-vframes', '1',
                     '-s', '320x180',
                     '-q:v', '2',
                     '-preset', 'ultrafast',
                     '-y', thumb_path
                 ]
-                subprocess.run(cmd, capture_output=True, timeout=60)
-            except:
-                pass
-        except Exception as e:
-            print(f"Thumbnail error: {e}")
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode == 0 and os.path.exists(thumb_path):
+                    generated = True
+            except Exception as e:
+                print(f"FFmpeg thumbnail error: {e}")
     
-    if os.path.exists(thumb_path):
-        return send_from_directory(thumb_dir, f'{base_id}_{thumb_num}.jpg')
+    # If still not generated, create placeholder
+    if not generated or not os.path.exists(thumb_path):
+        thumb_path = _generate_placeholder_thumbnail(thumb_dir, base_id, thumb_num)
     
-    return "No thumbnail", 404
+    return send_from_directory(thumb_dir, os.path.basename(thumb_path))
 
 @app.route('/api/regenerate-thumbnails', methods=['POST'])
 def regenerate_thumbnails():
     """Regenerate thumbnails for all recordings"""
+    import subprocess
+    import numpy as np
+    import cv2
+    
     thumb_dir = os.path.join(config.downloads_dir, '.thumbnails')
     os.makedirs(thumb_dir, exist_ok=True)
     
     count = 0
-    for rec in streamer_manager.get_recordings():
+    placeholders = 0
+    errors = 0
+    
+    recordings = streamer_manager.get_recordings()
+    total = len(recordings)
+    
+    for rec in recordings:
         filepath = rec.get('file_path', '')
         rec_id = rec.get('id', '')
+        
         if not filepath or not os.path.exists(filepath):
+            # Generate placeholders for missing files
+            for i in range(1, 5):
+                thumb_path = os.path.join(thumb_dir, f'{rec_id}_{i}.jpg')
+                if not os.path.exists(thumb_path):
+                    _generate_placeholder_thumbnail(thumb_dir, rec_id, i)
+                    placeholders += 1
             continue
         
-        thumb_path = os.path.join(thumb_dir, f'{rec_id}.jpg')
-        if not os.path.exists(thumb_path):
+        # Get video duration for smart timestamp selection
+        duration = _get_video_duration_filepath(filepath)
+        
+        # Generate 4 thumbnails at different points in the video
+        if duration > 0:
+            timestamps = [
+                max(1, min(5, duration * 0.02)),
+                max(10, duration * 0.33),
+                max(10, duration * 0.66),
+                max(10, duration * 0.90)
+            ]
+        else:
+            timestamps = [1, 10, 30, 60]  # Fallback timestamps
+        
+        for i, timestamp in enumerate(timestamps):
+            thumb_path = os.path.join(thumb_dir, f'{rec_id}_{i+1}.jpg')
+            if os.path.exists(thumb_path):
+                continue
+            
+            generated = False
+            
+            # Try OpenCV first
             try:
-                import cv2
                 cap = cv2.VideoCapture(filepath)
                 if cap.isOpened():
-                    cap.set(cv2.CAP_PROP_POS_MSEC, 10000)
-                    ret, frame = cap.read()
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                    if fps > 0 and frame_count > 0:
+                        frame_pos = int(timestamp * fps)
+                        frame_pos = min(frame_pos, int(frame_count) - 1)
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_pos)
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            frame = cv2.resize(frame, (320, 180), interpolation=cv2.INTER_LINEAR)
+                            cv2.imwrite(thumb_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                            generated = True
                     cap.release()
-                    if ret and frame is not None:
-                        frame = cv2.resize(frame, (320, 180), interpolation=cv2.INTER_LINEAR)
-                        cv2.imwrite(thumb_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                        count += 1
-            except ImportError:
-                # Fallback to FFmpeg
+            except Exception:
+                pass
+            
+            # Fallback to FFmpeg
+            if not generated:
                 try:
-                    import subprocess
                     cmd = [
                         config.ffmpeg_path or 'ffmpeg',
+                        '-threads', '2',
+                        '-ss', str(timestamp),
                         '-i', filepath,
-                        '-ss', '00:00:10',
                         '-vframes', '1',
                         '-s', '320x180',
+                        '-q:v', '2',
+                        '-preset', 'ultrafast',
                         '-y', thumb_path
                     ]
-                    subprocess.run(cmd, capture_output=True, timeout=60)
-                    count += 1
-                except:
-                    pass
+                    result = subprocess.run(cmd, capture_output=True, timeout=30)
+                    if result.returncode == 0 and os.path.exists(thumb_path):
+                        generated = True
+                except Exception as e:
+                    errors += 1
+            
+            # Final fallback - generate placeholder
+            if not generated:
+                thumb_path = _generate_placeholder_thumbnail(thumb_dir, rec_id, i + 1)
+                placeholders += 1
+            else:
+                count += 1
     
-    return jsonify({'generated': count})
+    return jsonify({'generated': count, 'placeholders': placeholders, 'errors': errors})
 
 @app.route('/api/fix-recordings', methods=['POST'])
 def fix_recordings():
-    """Fix MP4 metadata for all recordings"""
+    """Fix MP4 metadata for all recordings - add faststart, handle corrupt files"""
     import subprocess
     fixed = 0
+    skipped = 0
+    errors = 0
+    
     for rec in streamer_manager.get_recordings():
         filepath = rec.get('file_path', '')
         if not filepath or not os.path.exists(filepath):
             continue
         
-        # Skip non-mp4
-        if not filepath.endswith('.mp4'):
+        # Handle both .ts and .mp4
+        if not filepath.endswith('.mp4') and not filepath.endswith('.ts'):
             continue
         
-        # Check if already has faststart by probing
-        temp_output = filepath + '.fixed.mp4'
+        # Calculate timeout based on file size (larger files need more time)
+        file_size = 0
         try:
-            cmd = [
-                config.ffmpeg_path or 'ffmpeg',
-                '-i', filepath,
-                '-c', 'copy',
-                '-movflags', '+faststart',
-                '-y', temp_output
-            ]
-            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            file_size = os.path.getsize(filepath)
+            # Skip very small files (likely corrupt)
+            if file_size < 1000:
+                print(f"[Fix] Skipping too small file: {filepath}")
+                skipped += 1
+                continue
+            # Timeout: 1 minute per GB, minimum 60s, max 600s (10 min)
+            timeout = max(60, min(600, int(file_size / (1024**3) * 60)))
+        except:
+            timeout = 180
+        
+        temp_output = filepath + '.fixed.mp4'
+        
+        try:
+            # For .ts files, convert to MP4 with faststart
+            if filepath.endswith('.ts'):
+                cmd = [
+                    config.ffmpeg_path or 'ffmpeg',
+                    '-threads', '4',
+                    '-i', filepath,
+                    '-c', 'copy',
+                    '-movflags', '+faststart',
+                    '-y', temp_output
+                ]
+            else:
+                # For .mp4, just add faststart
+                cmd = [
+                    config.ffmpeg_path or 'ffmpeg',
+                    '-threads', '4',
+                    '-i', filepath,
+                    '-c', 'copy',
+                    '-movflags', '+faststart',
+                    '-y', temp_output
+                ]
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            
             if result.returncode == 0 and os.path.exists(temp_output):
-                os.replace(temp_output, filepath)
-                fixed += 1
-            elif os.path.exists(temp_output):
+                # Verify output is valid
+                if os.path.getsize(temp_output) > 1000:
+                    # Handle .ts -> .mp4 rename
+                    if filepath.endswith('.ts'):
+                        os.remove(filepath)
+                    os.replace(temp_output, filepath)
+                    fixed += 1
+                    print(f"[Fix] Fixed: {filepath}")
+                else:
+                    if os.path.exists(temp_output):
+                        os.remove(temp_output)
+                    errors += 1
+            else:
+                if os.path.exists(temp_output):
+                    os.remove(temp_output)
+                errors += 1
+                
+        except subprocess.TimeoutExpired:
+            if os.path.exists(temp_output):
                 os.remove(temp_output)
+            print(f"[Fix] Timeout for: {filepath}")
+            errors += 1
         except Exception as e:
             if os.path.exists(temp_output):
                 os.remove(temp_output)
-            print(f"Fix error: {e}")
+            print(f"[Fix] Error on {filepath}: {e}")
+            errors += 1
     
-    return jsonify({'fixed': fixed})
+    return jsonify({'fixed': fixed, 'skipped': skipped, 'errors': errors})
 
 @app.route('/api/clear-cache', methods=['POST'])
 def clear_cache():
