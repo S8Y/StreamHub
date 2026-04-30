@@ -207,12 +207,25 @@ class StreamerManager:
             except:
                 pass
         
-        # Chaturbate
+        # Chaturbate - use streamlink for status (more reliable)
         elif platform == 'CB':
+            try:
+                result = subprocess.run(
+                    ['streamlink', '--json', '--no-cache', f'https://chaturbate.com/{username}', 'best'],
+                    capture_output=True, text=True, timeout=20
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    data = json.loads(result.stdout)
+                    if data.get('streams'):
+                        return 'live'
+            except:
+                pass
+            # Fallback to page check
             try:
                 r = requests.get(f'https://chaturbate.com/{username}/', timeout=10, headers=headers)
                 if r.status_code == 200:
-                    if 'isOffline' not in r.text and 'offline' not in r.text[:200].lower():
+                    # Chaturbate shows "offline" in the title or meta when offline
+                    if 'offline' not in r.text[:500].lower():
                         return 'live'
             except:
                 pass

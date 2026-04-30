@@ -88,8 +88,11 @@ class Recorder:
         
         # Start recording process
         try:
-            if platform_slug.upper() in ['TW', 'KC', 'YT']:
-                # Use streamlink for Twitch/Kick/YouTube
+            # Use streamlink for platforms it supports
+            streamlink_platforms = ['TW', 'KC', 'YT', 'CB', 'CS', 'BC', 'SC', 'F4F', 'MFC', 'C4']
+            
+            if platform_slug.upper() in streamlink_platforms:
+                # Use streamlink for these platforms (handles stream extraction)
                 cmd = [
                     self.config.streamlink_path or "streamlink",
                     stream_url,
@@ -97,7 +100,7 @@ class Recorder:
                     "-o", output_path
                 ]
             else:
-                # Use FFmpeg directly for HLS streams (adult sites)
+                # Use FFmpeg directly for other HLS streams
                 cmd = [
                     self.config.ffmpeg_path or "ffmpeg",
                     "-i", stream_url,
@@ -341,19 +344,25 @@ class Recorder:
     
     def _get_stream_url(self, platform_slug: str, username: str) -> Optional[str]:
         """Get stream URL for a platform"""
-        # Use platform classes for HLS URLs (from streamonitor/streaweather)
+        # Use streamlink for platforms it supports (more reliable)
+        streamlink_platforms = ['CB', 'CS', 'BC', 'SC', 'F4F', 'MFC', 'C4']
+        
+        if platform_slug.upper() in streamlink_platforms:
+            return f"https://{platform_slug.lower()}.com/{username}"
+        
+        # Use platform classes for other platforms (HLS URLs)
         from backend.platforms import get_platform
         platform_cls = get_platform(platform_slug)
         if platform_cls:
             import asyncio
             try:
-                # Get async stream URL synchronously
                 loop = asyncio.new_event_loop()
                 url = loop.run_until_complete(
                     platform_cls().get_stream_url(username, "best")
                 )
                 loop.close()
-                return url
+                if url:
+                    return url
             except Exception as e:
                 print(f"Platform URL error: {e}")
         
@@ -362,13 +371,6 @@ class Recorder:
             'TW': f"https://www.twitch.tv/{username}",
             'KC': f"https://kick.com/{username}",
             'YT': f"https://www.youtube.com/@{username}",
-            'SC': f"https://stripchat.com/{username}",
-            'CB': f"https://chaturbate.com/{username}",
-            'CS': f"https://camsoda.com/{username}",
-            'F4F': f"https://www.flirt4free.com/{username}",
-            'MFC': f"https://myfreecams.com/{username}",
-            'C4': f"https://cam4.com/{username}",
-            'BC': f"https://bongacams.com/{username}",
             'FL': f"https://fansly.com/live/{username}"
         }
         
