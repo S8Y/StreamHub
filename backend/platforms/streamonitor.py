@@ -101,18 +101,40 @@ class StripChatPlatform(RoomIdBot):
 
 
 class ChaturbatePlatform(RoomIdBot):
-    """Chaturbate platform"""
+    """Chaturbate platform - uses streamlink for recording"""
     
     site_name = "Chaturbate"
     site_slug = "CB"
     
     async def get_status(self, username: str) -> StreamInfo:
-        url = f"https://chaturbate.com/{username}"
+        """Check if streamer is live - uses streamlink for reliability"""
+        import subprocess
+        import json
+        
         try:
+            # Use streamlink to check status (more reliable than scraping)
+            result = subprocess.run(
+                ['streamlink', '--json', '--no-cache', f'https://chaturbate.com/{username}', 'best'],
+                capture_output=True, text=True, timeout=20
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                data = json.loads(result.stdout)
+                if data.get('streams'):
+                    return StreamInfo(
+                        username=username,
+                        platform=self.site_slug,
+                        status=StreamStatus.LIVE
+                    )
+        except:
+            pass
+        
+        # Fallback to page check
+        try:
+            url = f"https://chaturbate.com/{username}"
             response = requests.get(url, timeout=15)
-            if "offline" not in response.url and response.status_code == 200:
-                # Check for room token in response
-                if "room" in response.text:
+            if response.status_code == 200:
+                # Check first 500 chars for offline indicator
+                if 'offline' not in response.text[:500].lower():
                     return StreamInfo(
                         username=username,
                         platform=self.site_slug,
@@ -130,15 +152,10 @@ class ChaturbatePlatform(RoomIdBot):
                 status=StreamStatus.ERROR
             )
     
-    async def get_stream_url(self, username: str, quality: str = "best") -> str:
-        """Get HLS stream URL from Chaturbate"""
-        url = f"https://chaturbate.com/{username}"
-        return self._parse_hls_url(username, url)
-    
-    def _parse_hls_url(self, username: str, page_url: str) -> str:
-        """Parse HLS URL from room page"""
-        # This requires extracting the stream from the room page
-        return f"https://cb-lp-5.chaturbate.com/video/{username}"
+    async def get_stream_url(self, username: str, quality: str = "best") -> Optional[str]:
+        """Get stream URL - now handled by streamlink in recorder"""
+        # Return None since we use streamlink for recording
+        return None
     
     def get_website_url(self, username: str) -> str:
         return f"https://chaturbate.com/{username}"
