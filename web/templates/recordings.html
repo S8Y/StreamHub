@@ -8,7 +8,7 @@
         <h1 class="page-title">Recordings</h1>
         <p class="page-subtitle">Watch your recorded streams</p>
     </div>
-    <div style="display: flex; gap: 8px;">
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
         <button class="btn btn-secondary" onclick="refreshRecordings()">Refresh</button>
         <button class="btn btn-secondary" onclick="regenerateThumbs()">Thumbs</button>
         <button class="btn btn-secondary" onclick="fixRecordings()">Fix</button>
@@ -22,10 +22,10 @@
             <h3 id="player-title">Video Player</h3>
             <button class="btn btn-ghost" onclick="closePlayer()">X</button>
         </div>
-        <video id="video-player" controls style="width: 100%; margin-top: 10px; background: #000;">
+        <video id="video-player" controls style="width: 100%; margin-top: 10px; background: #000; max-height: 70vh;">
             Your browser does not support video playback.
         </video>
-        <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
             <button class="btn btn-secondary btn-sm" id="download-btn" onclick="downloadCurrent()">Download</button>
             <button class="btn btn-danger btn-sm" onclick="deleteCurrent()">Delete</button>
         </div>
@@ -47,7 +47,8 @@
         <!-- Thumbnail Preview -->
         <div class="thumbnail-wrapper" id="thumbs-{{ recording.id }}">
             <img src="/thumbnails/{{ recording.id }}_1" alt="Preview" class="thumbnails-main" 
-                 onerror="this.style.display='none'">
+                 onerror="this.src='/thumbnails/{{ recording.id }}_2'; this.onerror=null;"
+                 onload="this.style.display='block';">
         </div>
         
         <div class="recording-meta">
@@ -71,7 +72,7 @@
     {% endfor %}
 </div>
 {% else %}
-<div class="text-center mt-lg">
+<div class="text-center mt-lg" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
     <p class="text-secondary">No recordings yet.</p>
     <a href="/streamers" class="btn btn-primary mt-md">Add Streamers to Monitor</a>
 </div>

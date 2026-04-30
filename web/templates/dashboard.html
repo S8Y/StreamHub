@@ -12,22 +12,17 @@
     <div class="stat-card">
         <div class="stat-icon">📡</div>
         <div class="stat-value">{{ streamers_count }}</div>
-        <div class="stat-label">Total</div>
+        <div class="stat-label">Streamers</div>
     </div>
     <div class="stat-card">
         <div class="stat-icon" style="color: var(--success);">●</div>
         <div class="stat-value">{{ live_count }}</div>
         <div class="stat-label">Live</div>
     </div>
-    <div class="stat-card">
+    <a href="/recordings" class="stat-card">
         <div class="stat-icon" style="color: var(--danger);">🎥</div>
         <div class="stat-value">{{ recording_count }}</div>
-        <div class="stat-label">Recording</div>
-    </div>
-    <a href="/recordings" class="stat-card">
-        <div class="stat-icon">▼</div>
-        <div class="stat-value">{{ recordings|length }}</div>
-        <div class="stat-label">Files</div>
+        <div class="stat-label">Recordings</div>
     </a>
 </div>
 

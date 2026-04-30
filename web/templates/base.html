@@ -96,9 +96,9 @@
             let targetY = mouseY;
             
             const layers = [
-                { gridSize: 100, dotSize: 1.5, parallaxStrength: 0.01, alpha: 0.08, lineAlpha: 0.02 },
-                { gridSize: 50, dotSize: 1, parallaxStrength: 0.02, alpha: 0.12, lineAlpha: 0.03 },
-                { gridSize: 25, dotSize: 0.5, parallaxStrength: 0.04, alpha: 0.06, lineAlpha: 0.015 }
+                { gridSize: 100, dotSize: 1, parallaxStrength: 0.01, alpha: 0.03, lineAlpha: 0.008 },
+                { gridSize: 50, dotSize: 0.5, parallaxStrength: 0.02, alpha: 0.04, lineAlpha: 0.012 },
+                { gridSize: 25, dotSize: 0.3, parallaxStrength: 0.04, alpha: 0.02, lineAlpha: 0.006 }
             ];
             
             function resize() {
@@ -111,7 +111,7 @@
                 const offsetX = (mouseX - window.innerWidth / 2) * parallaxStrength + Math.sin(time * 0.0005) * 2;
                 const offsetY = (mouseY - window.innerHeight / 2) * parallaxStrength + Math.cos(time * 0.0003) * 2;
                 
-                ctx.strokeStyle = 'rgba(168, 85, 247, ' + (lineAlpha * 0.5) + ')';
+                ctx.strokeStyle = 'rgba(168, 85, 247, ' + (lineAlpha * 0.3) + ')';
                 ctx.lineWidth = 0.5;
                 
                 for (let x = -gridSize; x < canvas.width + gridSize; x += gridSize) {
@@ -139,7 +139,7 @@
                         const glowAlpha = alpha * (0.5 + (1 - distance / maxDistance) * 0.5);
                         const pulse = Math.sin(time * 0.002 + x * 0.01 + y * 0.01) * 0.3 + 0.7;
                         
-                        ctx.fillStyle = 'rgba(168, 85, 247, ' + (glowAlpha * pulse * 0.5) + ')';
+                        ctx.fillStyle = 'rgba(168, 85, 247, ' + (glowAlpha * pulse * 0.25) + ')';
                         ctx.beginPath();
                         ctx.arc(px, py, dotSize, 0, Math.PI * 2);
                         ctx.fill();
