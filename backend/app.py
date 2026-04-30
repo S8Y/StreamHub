@@ -44,7 +44,7 @@ def index():
         streamers = streamer_manager.get_all_streamers()
         recordings = streamer_manager.get_recordings()
         live_count = sum(1 for s in streamers if s.get('status') == 'live')
-        recording_count = len([r for r in recordings if r.get('status') == 'recording'])
+        recording_count = len(recordings)  # Total recordings count
         
         return render_template(
             'dashboard.html',
