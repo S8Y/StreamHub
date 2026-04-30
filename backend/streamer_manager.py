@@ -2,6 +2,7 @@
 import os
 import json
 import uuid
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -207,28 +208,74 @@ class StreamerManager:
             except:
                 pass
         
-        # Chaturbate - use streamlink for status (more reliable)
+        # Chaturbate - page scraping (streamlink doesn't support CB natively)
+        # Note: Cloudflare protection may block requests - we'll try multiple methods
         elif platform == 'CB':
+            # Try with cloudflare bypass headers
+            cb_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
             try:
-                result = subprocess.run(
-                    ['streamlink', '--json', '--no-cache', f'https://chaturbate.com/{username}', 'best'],
-                    capture_output=True, text=True, timeout=20
+                # First try the room API endpoint
+                r = requests.get(
+                    f'https://chaturbate.com/{username}/',
+                    timeout=15,
+                    headers=cb_headers,
+                    allow_redirects=True
                 )
-                if result.returncode == 0 and result.stdout.strip():
-                    data = json.loads(result.stdout)
-                    if data.get('streams'):
-                        return 'live'
-            except:
-                pass
-            # Fallback to page check
-            try:
-                r = requests.get(f'https://chaturbate.com/{username}/', timeout=10, headers=headers)
+                
+                # Check if we got blocked by Cloudflare
+                if 'cloudflare' in r.text.lower()[:500] or 'just a moment' in r.text.lower()[:100]:
+                    print(f"[Status] Chaturbate Cloudflare blocked for {username}, trying alternate method")
+                    
+                    # Try alternate URL pattern
+                    try:
+                        alt_url = f'https://www.chaturbate.com/{username}/'
+                        r2 = requests.get(alt_url, timeout=15, headers=cb_headers)
+                        if r2.status_code == 200 and len(r2.text) > 10000:
+                            r = r2
+                    except:
+                        pass
+                
                 if r.status_code == 200:
-                    # Chaturbate shows "offline" in the title or meta when offline
-                    if 'offline' not in r.text[:500].lower():
+                    text = r.text[:3000]  # Check first 3000 chars
+                    text_lower = text.lower()
+                    
+                    # Check for Cloudflare block
+                    if 'just a moment' in text_lower[:200]:
+                        return 'unknown'  # Can't determine due to Cloudflare
+                    
+                    # If these strings appear, the room is offline
+                    if 'room_status="offline"' in text_lower:
+                        return 'offline'
+                    if '"is_online": false' in text:
+                        return 'offline'
+                    if '<title>Offline - ' in text or 'offline - chaturbate' in text_lower:
+                        return 'offline'
+                    
+                    # Check for online indicators  
+                    if '"is_online": true' in text:
                         return 'live'
-            except:
-                pass
+                    if 'room_status="online"' in text_lower:
+                        return 'live'
+                    
+                    # If page loaded fully and no offline indicator, likely online
+                    if len(r.text) > 30000:
+                        # Additional check: login form means offline
+                        if 'type="password"' in text_lower and 'placeholder="Room Password"' in text_lower:
+                            return 'offline'
+                        return 'live'
+                        
+            except Exception as e:
+                print(f"[Status] Chaturbate error for {username}: {e}")
+                return 'unknown'
         
         # CamSoda
         elif platform == 'CS':
